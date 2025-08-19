@@ -371,19 +371,6 @@ The [Illumina Stranded library preparation kit](https://emea.illumina.com/produc
 sci_wiz run-initial-qc
 ```
 
-## Import as a module
-
-Did I mention that you can import rna_seq module and carry out all the above steps in a script or jupyter notebook? Here is a quick example:
-
-```python
-from sci_wiz import rna_seq
-
-rna_seq.generate_config()
-# run below step after editing user_input.ini
-rna_seq.launch_data_preprocessing()
-```
-
-Here is a [jupyter notebook](main.ipynb) with same steps that you can expand according to your use case.
 
 ## Report issues
 
@@ -404,7 +391,7 @@ If you find *sci_wiz* useful in your research, please consider citing it:
 ```bibtex
 @software{
     sci_wiz,
-    author = {Jayaraman, Siddhath and Ojo, Ifedayo and Sikarwar, Mayank and Kwan, Ryan and Shaw, Robin and Miller, Crispin},
+    author = {Jayaraman, Siddharth and Ojo, Ifedayo and Sikarwar, Mayank and Kwan, Ryan and Shaw, Robin and Miller, Crispin},
     month = {8},
     title = {CRUK Scotland Institute Workflow Wizard: sci_wiz},
     url = {https://github.com/Beatson-CompBio/RNA-seq-workflow},
