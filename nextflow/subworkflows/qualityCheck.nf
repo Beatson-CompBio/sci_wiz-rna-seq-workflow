@@ -24,7 +24,7 @@ workflow rawQc {
         FASTQSCREEN(read_ch)
         
         if (params.initial_qc){
-            MULTIQC(FASTQC.out.collect()  + FASTQSCREEN.out.collect(), params.multiqc_config)
+            MULTIQC(FASTQC.out.logs_QC.collect()  + FASTQSCREEN.out.logs_FQS.collect(), params.multiqc_config)
         }
 
     emit:

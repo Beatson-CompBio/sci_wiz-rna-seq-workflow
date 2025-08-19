@@ -12,7 +12,7 @@ process FASTQSCREEN {
     tuple val(sample_id), path(read1), path(read2)
 
     output:
-    path "fastqscreen_${sample_id}_result"
+    path "fastqscreen_${sample_id}_result", emit: logs_FQS
 
     script:
     """

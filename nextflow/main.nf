@@ -36,6 +36,7 @@ params.qc_alignment = "${params.output_dir}/QC/Alignment_Info"
 params.qc_fastp = "${params.output_dir}/QC/Fastp"
 params.qc_fastqc = "${params.output_dir}/QC/Fastqc"
 params.qc_multiqc = "${params.output_dir}/QC/Multiqc"
+params.qc_fastqscreen = "${params.output_dir}/QC/Fastqscreen"
 
 // grab the read file for the channel factor based on batch_info 'params.batch_info'
 reads = params.batch_info ? "$params.dest/*{R1,R2}_001.fastq.gz" : params.reads
