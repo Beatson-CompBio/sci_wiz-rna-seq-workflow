@@ -5,140 +5,363 @@ sci_wiz packages Nextflow framework and Python's modular approach under the hood
 > [!NOTE]
 > You will need to download the STAR index, reference genome, and annotation files separately. The package will not download these files for you.
 
+# README (add‑fastqscreen‑module branch)
 
-What *sci_wiz* can do:
+A practical, biologist‑friendly manual for running the *sci‑wiz* RNA‑seq preprocessing pipeline on the **add‑fastqscreen‑module** branch. This guide assumes no prior experience with Nextflow.
 
-1. Data pre-processing: Running data pre-processing workflow will carry out the below steps and generate read count matrix. More information on the tools used in each step can be accessed using the links.
-    1. Trimming: uses FastP.
-    2. Reads QC: FastQC and MultiQC.
-    3. Mapping: we are using [STAR](https://hbctraining.github.io/Intro-to-rnaseq-hpc-O2/lessons/03_alignment.html).
-    4. Counting: FeatureCounts.
-    5. Bam to Cram: for optimising BAM file storage.
+---
 
-* [System Requirements](#system-requirements)
-* [Quick start](#quick-start)
-* [Import as a module](#import-as-a-module)
+## 1) What this pipeline does
 
-## System Requirements
+End‑to‑end preprocessing for bulk RNA‑seq:
 
-Running this package will require you to have access to virtual machine or high-performance cluster(hpc). Below are the requirements for running this package:
+* **QC of raw reads**: FastQC; **FastQ Screen** to check for contamination; MultiQC report.
+* **Optional trimming**: fastp.
+* **Alignment**: STAR.
+* **Quantification**: featureCounts (+ strandedness inference with RSeQC).
+* **Compression**: BAM → CRAM to save space.
 
-* Python 3.10 or higher
-* Slurm scheduler for running on HPC
+You can run just the initial QC, or the full preprocessing workflow.
 
-> [!NOTE]
-> You should have required access to create and remove symlinks.
-> Increase the number of file that your system can open using `ulimit -n 3000`. The number mentioned here is a suggestion from STAR developers in this [issue](https://github.com/alexdobin/STAR/issues/1099).It is possible STAR might fails because of open file limit error.
+---
 
-## Quick start
+## 2) Requirements at a glance
 
-To help you quickly start your RNA-seq analysis, we have developed a package which can be quickly installed. It also provide you options to either use the Command Line Interface(CLI) or import it in a script. We recommend using a using a virtual environment to run all the analyses so that your system configuration remains as it is.
+* **Operating system**: Linux shell (local VM/desktop or an HPC login node).
+* **Nextflow**: v23+ available on your system (ask IT or use your module system).
+* **Container engine**: either **Singularity/Apptainer** or **Docker**.
+* **Scheduler** (HPC only): **Slurm**.
+* **Reference data** you already have (or can obtain from your group):
 
-### Installation
+  * STAR genome index directory (75bp or 150bp build used in the lab).
+  * Reference genome FASTA.
+  * Gene annotation **GTF**.
+  * Gene annotation **BED** (for strandedness check).
+  * **FastQ Screen** configuration file (**fastq\_screen.conf**) and the Bowtie2 indices it references.
 
-* Let's start by creating a virtual environment and activate it. After running commands below, you should see the your virtual env. name at the far left end of the terminal. If not, please refer to python documentation on how to create a *[virtual env](https://docs.python.org/3/library/venv.html)*.
+> Tip: For large STAR runs, increase open files limit once per session: `ulimit -n 3000`.
 
-```python
+---
+
+## 3) Install the CLI (one‑time)
+
+It’s easiest to use a small Python virtual environment and install the CLI.
+
+```bash
+# 3A. Create & activate a virtual environment
 python -m venv .sci_wiz && source .sci_wiz/bin/activate
-```
 
-* Download the **latest** package [.whl file](https://github.com/Beatson-CompBio/sci_wiz-rna-seq-workflow/releases) from the release section of this repository and save it into your current working directory. Use the following command to install the package.
+# 3B. Install the package (choose one):
+#    Option 1 — From a prebuilt wheel (if provided by your team)
+pip install sci_wiz-<version>-py3-none-any.whl
 
-```python
-pip install sci_wiz-{version}-py3-none-any.whl
-```
+#    Option 2 — From source (inside the repository checkout)
+pip install .
 
-* You could check all the functionalities that *sci_wiz* provides using `--help` command.
-
-```console
+# 3C. Sanity check
 sci_wiz --help
 ```
 
-### Configuration
+> If your HPC uses **Poetry**, `poetry install` then run commands as `poetry run sci_wiz …`.
 
-* This is a required configuration step that would generate an *user_input.ini* file to store your inputs. Run below command in your terminal:
+---
 
-```console
+## 4) Make your user config (per project)
+
+Generate a template, then edit it with your project’s paths:
+
+```bash
 sci_wiz create-config
+# creates: user_input.ini in your current directory
 ```
 
-* You should have an *user_input.ini* file in your current working directory. The *.ini* file will take your input that required to run the data pre-processing smoothly.
+Open **user\_input.ini** and fill the values. Minimal example (edit paths):
 
-```YAML
+```ini
 [USER_INPUT]
-project_name = G12_yymm_uniqueName # G12 is group code, yymm: year and month; uniqueName.
-profile = hpc    # 'vm' if running on VM, 'hpc' if running on HPC.
-reads = /project_name/*/*_{R1,R2}_001.fastq.gz # absolute path
-output_dir = /project_name/Data/
-index = STAR_75bp_or_150bp
-annotation = Org.OrgCode.110.gtf
-reference = Org.OrgCode.110.fa
-annotation_bed = Org.OrgCode.110.bed
-batch_info = false   # batch_info True will require run1, run2 batch_destination, input_reads will be ignored.
-run1 = 
-run2 = 
-batch_destination = 
+project_name = G123_2508_myRun           # any short, descriptive name
+profile      = hpc                       # "vm" for a laptop/VM; "hpc" for a cluster
+reads        = /data/OMICS/proj/*/*_{R1,R2}_001.fastq.gz
+output_dir   = /data/OMICS/proj/Data/    # a base folder; the pipeline appends project_name
+index        = /refs/STAR_150bp
+annotation   = /refs/genes.gtf
+reference    = /refs/genome.fa
+annotation_bed = /refs/genes.bed
+fastqscreen_conf = /refs/fastq_screen.conf
+batch_info   = false                     # true only if you need to concatenate two runs
+run1 =
+run2 =
+batch_destination =
 
 [TRIMMING]
-trim_front_read_01 = 1 # will trim the front bases from read 1
-trim_front_read_02 = 1 # will trim front bases from read 2
-trim_tail_read_01 = 0 # will trim tail bases from read 1
-trim_tail_read_02 = 0 # will trim tail bases from read 2
+trim_front_read_01 = 1
+trim_front_read_02 = 1
+trim_tail_read_01  = 0
+trim_tail_read_02  = 0
 ```
 
-* **project_name**: project name, it will provide you with an option to follow project naming convention.
-* **profile**: type of system, such as a virtual machine or high-compute cluster, you are using to run this analysis.
-* **reads**: Path to input raw RNA-seq reads in fastq.gz format.
-* **output_dir**: Base path for the output directory.
-* **index**: Path to the STAR index. *Right now this workflow only supports alignment using STAR.*
-* **annotation**: Path to the GTF file containing gene annotations.
-* **reference**: Path to the reference genome FASTA file.
-* **annotation_bed**: Path to the BED file containing gene annotations.
-* **batch_info**: Flag indicating whether raw files are available in multiple batches. If this is *True*, you will need to provide *run1*, *run2*, & *batch_destination*.
-* **run1** and **run2**: Paths to raw data for batch setup.
-* **batch_destination**: Destination path for organized batch data.
-* **trim_front_read_01**: Number of bases trimmed from front of Read_01. Default is 1.
-* **trim_front_read_02**: Number of bases trimmed from front of Read_02. Default is 1.
-* **trim_tail_read_01**: Number of bases trimmed from tail of Read_01. Default is 0.
-* **trim_tail_read_02**: Number of bases trimmed from tail of Read_02. Default is 0.
+**Profiles**:
 
-### Data Pre-processing
+* **vm** = runs locally and uses your chosen container engine directly.
+* **hpc** = submits a Slurm job under the hood and monitors it for you.
 
-> [!IMPORTANT]
-> If you want to use the default trimming inputs then directly use the pre-processing command. Otherwise, have a look at this [section](#trimming-raw-data) first.
-> Please make sure the system requirements are met before running the below commands.
+**Batch merging (optional)**:
 
-* Simply trigger the data pre-processing commands. This program will work smoothly if the below two conditions are satisfied
-    * Given inputs are as expected.
-    * You have permission to read all the required files & folder such as *input.fastq.gz, index folder, annotation.gtf,annotation.bed, & reference.fa*.
+* If the same samples were sequenced in two separate runs, set `batch_info = true` and define `run1`, `run2`, and `batch_destination`. The pipeline will concatenate matching FASTQs into the destination before processing.
 
-```console
-sci_wiz run-preprocessing
+---
+
+## 5) Check Nextflow & container engine
+
+```bash
+# Check nextflow version detected by the wrapper
+sci_wiz check-nf-version
+
+# Choose the container engine at runtime with --engine
+#   singularity (HPC default) or docker (VM/desktop)
 ```
 
-#### Running in a virtual machine(VM)
+**HPC users**: ensure the login node has `module load nextflow` and `module load singularity` available, or that both are on your `$PATH`.
 
-* Make sure you have entered `vm` as your profile in *user_input.ini*. For example:
+---
 
-```YAML
-[USER_INPUT]
-profile = vm
-...
+## 6) Run **Initial QC only** (FastQC + FastQ Screen + MultiQC)
+
+Good for a quick look at new data before alignment.
+
+```bash
+# On HPC with Singularity (recommended)
+sci_wiz run-initial-qc --config user_input.ini --engine singularity
+
+# On a VM/desktop with Docker
+sci_wiz run-initial-qc --config user_input.ini --engine docker
 ```
 
-#### Running in a virtual machine(HPC)
+**Outputs** will appear under your `output_dir/project_name/` in subfolders like:
 
-**Dependency**: Current workflow is only configured to work with *SLURM*.
+* `QC/Fastqc/…`
+* `QC/Fastqscreen/…`
+* `QC/Multiqc/multiqc_report.html`
 
-* Make sure your input data is available in the shared scratch, preferably in you current working directory.
+> If the FastQ Screen results folder doesn’t appear, see **Appendix A** (known quirks) about setting `qc_fastqscreen`.
 
-* *profile* for running data pre-processing in `hpc` should have input as below:
+---
 
-```YAML
-[USER_INPUT]
-profile = hpc
-...
+## 7) Run the **full preprocessing**
+
+This performs trimming (unless you’ve already decided to skip it), QC, STAR alignment, featureCounts, MultiQC and BAM→CRAM.
+
+```bash
+# HPC + Singularity
+sci_wiz run-preprocessing --config user_input.ini --engine singularity
+
+# VM + Docker
+sci_wiz run-preprocessing --config user_input.ini --engine docker
 ```
+
+The wrapper writes a Nextflow params JSON, launches the pipeline, and for **HPC** submits a Slurm job. You’ll see live status messages; on HPC the job name starts with `nf-parent`.
+
+---
+
+## 8) Where to find your results
+
+Inside `output_dir/project_name/`:
+
+* **QC**
+
+  * `QC/Fastp/` — fastp HTML & JSON (if trimming enabled)
+  * `QC/Fastqc/` — FastQC per sample
+  * `QC/Fastqscreen/` — FastQ Screen per sample
+  * `QC/Multiqc/multiqc_report.html` — combined report
+* **Alignment**
+
+  * `Bams/<sample>.bam` — coordinate‑sorted STAR BAM
+  * `QC/Alignment_Info/` — STAR `Log.final.out`, splice junctions, etc.
+* **Counts**
+
+  * `Feature_Counts/<project>_raw_counts_fc.tsv` — gene counts table
+  * `Feature_Counts/<project>_raw_counts_meta_fc.txt` — featureCounts summary
+* **CRAM**
+
+  * `Crams/<sample>.cram` — compressed alignment
+
+> File names and exact destinations are set by the pipeline; MultiQC will automatically pick up most outputs.
+
+---
+
+## 9) Tuning & advanced usage
+
+* **Trimming**: Initial QC mode *bypasses* trimming. In full runs, trimming is **on** by default. You can adjust the four trimming parameters in `[TRIMMING]`.
+* **Resources**: Per‑step CPU/memory/containers are defined for both VM and HPC profiles. If your HPC policy requires different queues/partitions, your admin can adjust the profile settings once for everyone.
+* **Container engine**: Pick `--engine singularity` or `--engine docker`. The pipeline selects compatible container images automatically.
+* **Resuming**: The wrapper runs Nextflow with `-resume`, so you can safely re‑run after fixing a path or parameter without redoing work.
+
+---
+
+## 10) Troubleshooting
+
+* **“Non‑zero exit status”**: Check `.nextflow.log` in your working directory for details. Then re‑run; cached steps will be skipped.
+* **Slurm submission failure (HPC)**: You’ll see a clear error message. Confirm you can run `sbatch` on your login node and have access to the correct partition.
+* **FastQ Screen errors**: Ensure `fastqscreen_conf` points to a readable file and that the Bowtie2 index paths inside it are correct.
+* **STAR “Too many open files”**: Run `ulimit -n 3000` before launching.
+* **Wrong profile**: If you’re on a laptop/VM, set `profile = vm` in `user_input.ini`. On HPC, set `profile = hpc`.
+
+---
+
+## 11) Quick recipes
+
+* **QC only on a VM**
+
+  ```bash
+  sci_wiz run-initial-qc --config user_input.ini --engine docker
+  ```
+* **Full run on HPC**
+
+  ```bash
+  sci_wiz run-preprocessing --config user_input.ini --engine singularity
+  ```
+* **Check versions**
+
+  ```bash
+  sci_wiz version
+  sci_wiz check-nf-version
+  ```
+
+---
+
+## Appendix A — How the wrapper works (for the curious)
+
+* The `sci_wiz` command:
+
+  * writes your edited `user_input.ini` into a JSON file consumed by Nextflow,
+  * chooses the right profile (`vm` or `hpc`) and container engine,
+  * triggers Nextflow locally (**vm**) or via a generated Slurm script (**hpc**),
+  * uses `-resume` so re‑runs are incremental.
+
+This keeps the heavy lifting in Nextflow while giving you a single, simple CLI.
+
+---
+
+## FastQ Screen: config file (`fastq_screen.conf`)
+
+**What the pipeline expects**
+
+* You provide a path to a FastQ Screen config file in your `user_input.ini` as `fastqscreen_conf` (this key is written by `sci_wiz configure`). The Nextflow module calls `fastq_screen` with `--conf ${params.fastqscreen_conf} --aligner bowtie2 --threads ${task.cpus}` and writes results to a run-specific folder, e.g. `fastqscreen_<sample>_result`. No other options are read from the pipeline — so the conf file only needs to describe the Bowtie2 databases you want to screen against.
+
+**Minimal contents of the conf file**
+Use the standard FastQ Screen format that maps a label to a Bowtie2 index basename. A lab-specific skeleton could look like:
+
+```text
+# Example entries — replace with real paths to your Bowtie2 indices
+# DATABASE yeast   /refs/bowtie2/yeast/yeast
+# DATABASE mouse   /refs/bowtie2/mouse/GRCm39
+# DATABASE human   /refs/bowtie2/human/GRCh38
+```
+
+Because the FASTQ Screen process sets `--aligner bowtie2` itself, your indices must be Bowtie2-builds. Ensure these paths are visible inside the container on your platform (profiles set Docker/Singularity containers; Singularity autofs mounts are enabled).
+
+**QC/Fastqscreen folder (current behaviour)**
+As of 2025‑08‑19 on branch **add‑fastqscreen‑module**, the pipeline defines a default publish directory for FastQ Screen in `main.nf`:
+
+```groovy
+params.qc_fastqscreen = "${params.output_dir}/QC/Fastqscreen"
+```
+
+The FastQ Screen process publishes there by default, and its output is now labelled with `emit: logs_FQS`. The QC subworkflow consumes this labelled output for MultiQC aggregation. No extra parameters are needed from users; the folder will appear automatically.
+
+---
+
+## Run the Nextflow pipeline directly (skip the `sci_wiz` CLI)
+
+If you prefer not to use the Python wrapper/CLI, you can run the Nextflow pipeline yourself. Below mirrors what the wrapper does under the hood (profile + container engine + `-params-file` + optional `-entry`).
+
+### 1) Create a `params.json`
+
+Prepare a JSON file with the keys that the pipeline reads. Fill in absolute paths appropriate for your system:
+
+```json
+{
+  "project_name": "G123_2508_demo",
+  "reads": "/data/PROJECT/*/*_{R1,R2}_001.fastq.gz",
+  "output_dir": "/data/PROJECT/Data/G123_2508_demo",
+  "index": "/refs/STAR_75bp_or_150bp",
+  "annotation": "/refs/Org.OrgCode.110.gtf",
+  "reference": "/refs/Org.OrgCode.110.fa",
+  "annotation_bed": "/refs/Org.OrgCode.110.bed",
+  "getStrand": "/path/to/getstrand.py",
+  "cleanCount": "/path/to/cleancount.py",
+  "batch_info": false,
+  "run1": "",
+  "run2": "",
+  "dest": "",
+  "initial_qc": false,
+  "trim_front_read_01": 1,
+  "trim_front_read_02": 1,
+  "trim_tail_read_01": 0,
+  "trim_tail_read_02": 0,
+  "multiqc_config": "/path/to/nextflow/multiqc",
+  "fastqscreen_conf": "/path/to/fastq_screen.conf",
+}
+```
+
+Keys consumed by the workflow and modules are shown in `nextflow/main.nf` and the QC subworkflow. No `qc_fastqscreen` key is required; the pipeline sets the publish directory by default.
+
+### 2) Run Nextflow
+
+**On a VM/workstation** (choose docker or singularity):
+
+```bash
+# with Singularity containers
+nextflow run nextflow/main.nf \
+  -c nextflow/nextflow.config \
+  -profile vm,singularity \
+  -params-file params.json \
+  -resume
+
+# or with Docker containers
+nextflow run nextflow/main.nf \
+  -c nextflow/nextflow.config \
+  -profile vm,docker \
+  -params-file params.json \
+  -resume
+```
+
+These flags mirror the wrapper’s command line.
+
+**On HPC (Slurm)**:
+
+```bash
+nextflow run nextflow/main.nf \
+  -c nextflow/nextflow.config \
+  -profile hpc,singularity \
+  -params-file params.json \
+  -resume
+```
+
+The `hpc` profile in `nextflow.config` assigns Slurm executors and suitable container images/resources to each process. Load `nextflow` and `singularity` per your site setup.
+
+### 3) Run *only* the initial QC
+
+The pipeline exposes a `rawQc` workflow that performs trimming (unless `initial_qc=true`), FastQC and FastQ Screen, with MultiQC if `initial_qc=true`. You can target it directly with `-entry`:
+
+```bash
+nextflow run nextflow/main.nf \
+  -c nextflow/nextflow.config \
+  -profile vm,singularity \
+  -params-file params.json \
+  -entry rawQc \
+  -resume
+```
+
+This is exactly how the CLI’s `run-initial-qc` subcommand invokes Nextflow.
+
+### Outputs you should see
+
+* `QC/Fastqc/` (FastQC zips/HTML) and `QC/Fastp/` if trimming ran; `QC/Multiqc/` with `multiqc_report.html`; `QC/Fastqscreen/`. Defaults for all except FastQ Screen are set in `main.nf`.
+
+
+---
+
 
 ### Trimming raw data
 
@@ -181,11 +404,11 @@ If you find *sci_wiz* useful in your research, please consider citing it:
 ```bibtex
 @software{
     sci_wiz,
-    author = {Ojo, Ifedayo and Sikarwar, Mayank and Kwan, Ryan and Shaw, Robin and Miller, Crispin},
-    month = {1},
+    author = {Jayaraman, Siddhath and Ojo, Ifedayo and Sikarwar, Mayank and Kwan, Ryan and Shaw, Robin and Miller, Crispin},
+    month = {8},
     title = {CRUK Scotland Institute Workflow Wizard: sci_wiz},
     url = {https://github.com/Beatson-CompBio/RNA-seq-workflow},
-    year = {2024}
+    year = {2025}
     }
 ```
 
