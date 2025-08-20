@@ -10,6 +10,7 @@ process FASTQSCREEN {
 
     input:
     tuple val(sample_id), path(read1), path(read2)
+    path database  // folder that contains fastq_screen.conf and the indices
 
     output:
     path "fastqscreen_${sample_id}_result", emit: logs_FQS
@@ -18,7 +19,7 @@ process FASTQSCREEN {
     """
     mkdir fastqscreen_${sample_id}_result
     fastq_screen \\
-        --conf ${params.fastqscreen_conf} \\
+        --conf ${database}/fastq_screen.conf \\
         --aligner bowtie2 \\
         --threads ${task.cpus} \\
         --outdir fastqscreen_${sample_id}_result \\
