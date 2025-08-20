@@ -36,7 +36,7 @@ class Configure(ICommand):
         annotation= Org.OrgCode.110.gtf
         reference= Org.OrgCode.110.fa
         annotation_bed= Org.OrgCode.110.bed
-        fastqscreen_conf = /path/to/fastq_screen.conf  # Path to FastQ Screen configuration file
+        fastqscreen_db_dir = /path/to/FastQ_Screen_Genomes # Path to a folder that contains 'fastq_screen.conf' and the Bowtie2 indices it references.
         batch_info= false   # batch_info True will require run1, run2, batch_destination, input_reads will be ignored.
         run1=
         run2=
