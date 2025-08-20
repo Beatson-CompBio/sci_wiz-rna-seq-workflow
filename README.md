@@ -87,7 +87,7 @@ index        = /refs/STAR_150bp
 annotation   = /refs/genes.gtf
 reference    = /refs/genome.fa
 annotation_bed = /refs/genes.bed
-fastqscreen_conf = /refs/fastq_screen.conf
+fastqscreen_db_dir = /path/to/FastQ_Screen_Genomes
 batch_info   = false                     # true only if you need to concatenate two runs
 run1 =
 run2 =
@@ -242,32 +242,37 @@ This keeps the heavy lifting in Nextflow while giving you a single, simple CLI.
 
 ---
 
-## FastQ Screen: config file (`fastq_screen.conf`)
+## FastQ Screen: database folder + conf (robust, container‑safe)
 
 **What the pipeline expects**
 
-* You provide a path to a FastQ Screen config file in your `user_input.ini` as `fastqscreen_conf` (this key is written by `sci_wiz configure`). The Nextflow module calls `fastq_screen` with `--conf ${params.fastqscreen_conf} --aligner bowtie2 --threads ${task.cpus}` and writes results to a run-specific folder, e.g. `fastqscreen_<sample>_result`. No other options are read from the pipeline — so the conf file only needs to describe the Bowtie2 databases you want to screen against.
+* You now provide a **directory** via `fastqscreen_db_dir` (in `user_input.ini` or `params.json`). This directory must contain `fastq_screen.conf` **and** the Bowtie2 indices referenced by the conf.
+* The module changes into this directory before running FastQ Screen. Therefore, the conf should list **relative paths** to the index basenames (relative to this directory). No Singularity bind options are required.
 
-**Minimal contents of the conf file**
-Use the standard FastQ Screen format that maps a label to a Bowtie2 index basename. A lab-specific skeleton could look like:
+**Minimal directory layout**
 
-```text
-# Example entries — replace with real paths to your Bowtie2 indices
-# DATABASE yeast   /refs/bowtie2/yeast/yeast
-# DATABASE mouse   /refs/bowtie2/mouse/GRCm39
-# DATABASE human   /refs/bowtie2/human/GRCh38
+```
+FastQ_Screen_Genomes/
+├─ fastq_screen.conf
+├─ Human/Homo_sapiens.GRCh38.*.bt2
+├─ Mouse/Mus_musculus.GRCm39.*.bt2
+├─ Ecoli/Ecoli.*.bt2
+└─ ...
 ```
 
-Because the FASTQ Screen process sets `--aligner bowtie2` itself, your indices must be Bowtie2-builds. Ensure these paths are visible inside the container on your platform (profiles set Docker/Singularity containers; Singularity autofs mounts are enabled).
+**Minimal contents of `fastq_screen.conf` (relative paths)**
 
-**QC/Fastqscreen folder (current behaviour)**
-As of 2025‑08‑19 on branch **add‑fastqscreen‑module**, the pipeline defines a default publish directory for FastQ Screen in `main.nf`:
-
-```groovy
-params.qc_fastqscreen = "${params.output_dir}/QC/Fastqscreen"
+```
+# DATABASE <Label> <relative/path/to/index/basename>
+DATABASE Human   Human/Homo_sapiens.GRCh38
+DATABASE Mouse   Mouse/Mus_musculus.GRCm39
+DATABASE Ecoli   Ecoli/Ecoli
+DATABASE PhiX    PhiX/phi_plus_SNPs
+DATABASE Adapters Adapters/Contaminants
 ```
 
-The FastQ Screen process publishes there by default, and its output is now labelled with `emit: logs_FQS`. The QC subworkflow consumes this labelled output for MultiQC aggregation. No extra parameters are needed from users; the folder will appear automatically.
+> Tip: The path must include the index **basename** (no file extension). The module sets `--aligner bowtie2` and `--threads` automatically.
+
 
 ---
 
@@ -300,11 +305,12 @@ Prepare a JSON file with the keys that the pipeline reads. Fill in absolute path
   "trim_tail_read_01": 0,
   "trim_tail_read_02": 0,
   "multiqc_config": "/path/to/nextflow/multiqc",
-  "fastqscreen_conf": "/path/to/fastq_screen.conf",
+  "fastqscreen_db_dir": "/path/to/FastQ_Screen_Genomes"
 }
 ```
 
-Keys consumed by the workflow and modules are shown in `nextflow/main.nf` and the QC subworkflow. No `qc_fastqscreen` key is required; the pipeline sets the publish directory by default.
+Keys consumed by the workflow and modules are shown in `nextflow/main.nf` and the QC subworkflow. Note the **folder** key `fastqscreen_db_dir`.
+
 
 ### 2) Run Nextflow
 
