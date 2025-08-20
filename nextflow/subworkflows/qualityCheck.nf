@@ -11,6 +11,9 @@ workflow rawQc {
             Transformer.transformSampleId(row)
     }
 
+    // Broadcast one database folder to all FASTQSCREEN tasks
+    db_ch = Channel.fromPath(params.fastqscreen_db_dir, checkIfExists: true)
+
     main:
         fastp_json = null
         fastp_html = null
@@ -21,10 +24,11 @@ workflow rawQc {
             fastp_html = FASTP.out.html
         }
         FASTQC(read_ch)
-        FASTQSCREEN(read_ch)
+        FASTQSCREEN(read_ch,db_ch)
         
         if (params.initial_qc){
-            MULTIQC(FASTQC.out.logs_QC.collect()  + FASTQSCREEN.out.logs_FQS.collect(), params.multiqc_config)
+            qc_ch = Channel.merge(FASTQC.out.logs_QC, FASTQSCREEN.out.logs_FQS)
+            MULTIQC(qc_ch.collect(), params.multiqc_config)
         }
 
     emit:
