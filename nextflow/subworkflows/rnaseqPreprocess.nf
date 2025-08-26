@@ -24,7 +24,8 @@ workflow rnaSeq {
         COUNT(MAPPING.out.sorted_bam_file.collect(), annotation_ch, IDENTIFY_STRAND.out.strand, clean_counts_ch)
         fastp_ch = rawQc.out.fastp_json
         fastqc_ch = rawQc.out.fastqc_logs
-        MULTIQC(fastp_ch.mix(fastqc_ch, MAPPING.out, COUNT.out.log).collect(), params.multiqc_config)
+        fastqscreen_ch = rawQc.out.fastqscreen_logs
+        MULTIQC(fastp_ch.mix(fastqc_ch, fastqscreen_ch, MAPPING.out, COUNT.out.log).collect(), params.multiqc_config)
         // convert bam to crams
         sampleId_ch = rawQc.out.read_ch.map{ row -> row[0] }
         BAM_TO_CRAM(sampleId_ch, MAPPING.out.sorted_bam_file, reference_ch)
