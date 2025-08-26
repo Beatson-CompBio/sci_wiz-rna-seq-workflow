@@ -18,12 +18,20 @@ process FASTQSCREEN {
     script:
     """
     mkdir fastqscreen_${sample_id}_result
+    
+    # Store absolute paths before changing directory
+    WORK_DIR=\$(pwd)
+    OUTPUT_DIR="\${WORK_DIR}/fastqscreen_${sample_id}_result"
+    READ1_PATH="\${WORK_DIR}/${read1}"
+    READ2_PATH="\${WORK_DIR}/${read2}"
+    
+    cd ${database}
     fastq_screen \\
-        --conf ${database}/fastq_screen.conf \\
+        --conf fastq_screen.conf \\
         --aligner bowtie2 \\
         --threads ${task.cpus} \\
-        --outdir fastqscreen_${sample_id}_result \\
-        ${read1} ${read2}
+        --outdir "\${OUTPUT_DIR}" \\
+        "\${READ1_PATH}" "\${READ2_PATH}"
     """
 }
 
