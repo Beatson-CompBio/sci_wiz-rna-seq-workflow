@@ -12,7 +12,7 @@ workflow rawQc {
     }
 
     // Broadcast one database folder to all FASTQSCREEN tasks
-    db_ch = Channel.fromPath(params.fastqscreen_db_dir, checkIfExists: true)
+    db_ch = Channel.value(file(params.fastqscreen_db_dir))
 
     main:
         fastp_json = null
