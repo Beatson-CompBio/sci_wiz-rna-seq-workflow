@@ -27,7 +27,7 @@ workflow rawQc {
         FASTQSCREEN(read_ch,db_ch)
         
         if (params.initial_qc){
-            qc_ch = Channel.merge(FASTQC.out.logs_QC, FASTQSCREEN.out.logs_FQS)
+            qc_ch = FASTQC.out.logs_QC.concat(FASTQSCREEN.out.logs_FQS)
             MULTIQC(qc_ch.collect(), params.multiqc_config)
         }
 
