@@ -31,7 +31,6 @@ hostname
 PWD=$(pwd)
 echo $PWD
 module load nextflow
-module load singularity
 export NXF_WORK=$PWD/to_be_removed
 
 nextflow run {{ workflow}} \\
